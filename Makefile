@@ -1,6 +1,4 @@
-CC = gcc
-CFLAGS = -O2 -Wall -lm
+CC = nvcc
 
-
-wave: wave_2d.c wave_2d.h
+wave: wave_2d.cu wave_2d.h
 	$(CC) $< -o $@ $(CFLAGS)
