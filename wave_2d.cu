@@ -3,62 +3,77 @@
 #include <math.h>
 #include "wave_2d.h"
 #include <time.h>
-
-#define THREAD_NUM 512
 #define BLOCK_NUM 32
+#define THREAD_NUM 512
 
 
-__global__ void  kernel_cuda_update(float *olddata, float *data, float *newdata,
-                                    int SIZE, int steps, int grid_sz, float C, float K, float dt){
-    //printf("hi\n");
-	const int tid = blockIdx.x*blockDim.x + threadIdx.x;
-	const int len = gridDim.x*blockDim.x;
-    int i, k;
-    int add_x, sub_x, x;
-    int add_y, sub_y, y;
-    
-	for(i = tid; i < SIZE; i+= len){
-		//if(k == 1) printf("%f\n",data[i]);
-		x = i / grid_sz;
-		y = i % grid_sz;
-		add_x = x+1 >= grid_sz ? x: x+1;
-		sub_x = x-1 < 0 ? 0: x-1;
-		add_y = y+1 >= grid_sz ? y: y+1;
-		sub_y = y-1 < 0 ? 0: y+1;
-		float pot =  data[add_x*grid_sz+y]+
-					  data[sub_x*grid_sz+y]+
-					  data[add_y+x*grid_sz]+
-					  data[sub_y+x*grid_sz]-
-					  4*data[x*grid_sz+y];
-		float opr = C * dt;
-		newdata[i] = ( opr*opr * pot * 2 + 4 * data[i] - olddata[i] *(2 - K * dt) ) / (2 + K * dt);
-		
-		//printf("QQ\n");
-	}   
-	__syncthreads();
-	for(k = tid; k < SIZE; k+= len){
-		olddata[k] = data[k];
-		data[k] = newdata[k];
-		//printf("%f\n", data[k]);
+__global__ void kernel_cuda_update(double *olddata, double *data, double *newdata, double C, double K, double dt){
+	
+	const int tid = threadIdx.x;
+	const int bid = blockIdx.x; 
+	//if(tid == 0)printf("len = %d\n", len);
+	int x, i, j;
+	int add_i, add_j, sub_i, sub_j;
+	for(x = tid + bid*THREAD_NUM; x < ARR_SZ; x += THREAD_NUM*BLOCK_NUM){
+		i = x / GRID_SZ;
+		j = x % GRID_SZ;
+		add_i = i+1 >= GRID_SZ ? i : i+1;
+		add_j = j+1 >= GRID_SZ ? j : j+1;
+		sub_i = i-1 < 0 ? 0 : i - 1;
+		sub_j = j-1 < 0 ? 0 : j - 1;
+		double pot = data[add_i * GRID_SZ + j] + 
+					 data[sub_i * GRID_SZ + j] +
+					 data[add_j + i * GRID_SZ] +
+					 data[sub_j + i * GRID_SZ] -
+					 4 * data[i * GRID_SZ + j] ;
+		double tmp = C * dt;
+		newdata[x] = ( tmp*tmp * pot * 2 + 4 * data[x] - olddata[x] *(2 - K * dt)) / (2 + K*dt);
+		//printf("X = %d, new = ")
 	}
-   __syncthreads();
-   /*if(tid == 0 && bid == 0){
-		for(i = 0;i < GRID_SZ; ++i){
-			for(k = 0;k < GRID_SZ; ++k){
-				printf("%4.3lf, ",data[i*GRID_SZ+k]);
-			}
-			printf("\n");
-		}
-   }*/
+
+
 }
+__global__ void cuda_move_data(double *olddata, double *data, double *newdata){
+	const int tid = threadIdx.x;
+	const int bid = blockIdx.x; 
+	int i;
+	for(i = tid + bid*THREAD_NUM; i < ARR_SZ; i += BLOCK_NUM*THREAD_NUM){
+		olddata[i] = data[i];
+		data[i] = newdata[i];
+	}
+
+}
+void cuda_update(double* olddata, double* data, double* newdata,double C,double K, double dt){
+	double *gpu_data, *gpu_old, *gpu_new;
+	cudaMalloc((void**) &gpu_data, sizeof(double)*ARR_SZ);
+	cudaMalloc((void**) &gpu_old, sizeof(double)*ARR_SZ);
+	cudaMalloc((void**) &gpu_new, sizeof(double)*ARR_SZ);
+	cudaMemcpy(gpu_data, data, sizeof(double)*ARR_SZ, cudaMemcpyHostToDevice);
+	cudaMemcpy(gpu_old, olddata, sizeof(double)*ARR_SZ, cudaMemcpyHostToDevice);
+	cudaMemcpy(gpu_new, newdata, sizeof(double)*ARR_SZ, cudaMemcpyHostToDevice);
+	//int _num = ARR_SZ/THREAD_NUM + 1;
+	//if(_num > BLOCK_NUM) _num = BLOCK_NUM;
+	int i;
+	for(i = 1;i <= 2000; ++i){
+		kernel_cuda_update<<< BLOCK_NUM, THREAD_NUM>>>(gpu_old, gpu_data, gpu_new,C, K, dt);
+		cuda_move_data<<<BLOCK_NUM, THREAD_NUM>>>(gpu_old, gpu_data, gpu_new);
+	}	
+	cudaMemcpy(olddata, gpu_old, sizeof(double)*ARR_SZ, cudaMemcpyDeviceToHost);
+	cudaMemcpy(data, gpu_data, sizeof(double)*ARR_SZ, cudaMemcpyDeviceToHost);
+	cudaMemcpy(newdata, gpu_new, sizeof(double)*ARR_SZ, cudaMemcpyDeviceToHost);
+	cudaFree(gpu_data);
+	cudaFree(gpu_old);
+	cudaFree(gpu_new);
+	
+		}
 int main(){
     int i, j;
-    float dt = 0.04, C = 16, K = 0.1, h = 6;
-    float *data, *olddata, *newdata; //*tmp;
-    float x[PEAK_SZ][PEAK_SZ], linspace[PEAK_SZ], delta = 2.0/(PEAK_SZ-1.0);
-    data = (float*)malloc(sizeof(float)*ARR_SZ);
-    olddata = (float*)malloc(sizeof(float)*ARR_SZ);
-    newdata = (float*)malloc(sizeof(float)*ARR_SZ);
+    double dt = 0.04, C = 16, K = 0.1, h = 6;
+    double *data, *olddata, *newdata;//*tmp;
+    double x[PEAK_SZ][PEAK_SZ], linspace[PEAK_SZ], delta = 2.0/(PEAK_SZ-1.0);
+    data = (double*)malloc(sizeof(double)*ARR_SZ);
+    olddata = (double*)malloc(sizeof(double)*ARR_SZ);
+    newdata = (double*)malloc(sizeof(double)*ARR_SZ);
     for(i = 0; i < ARR_SZ; i++){
         data[i] = 1.0;
     }
@@ -80,29 +95,33 @@ int main(){
     for(i = 0; i < ARR_SZ; i++){
         olddata[i] = data[i];
     }
-    /*for(i = 0; i < 20; i++){
+
+    /*for(i = 0; i < 2000; i++){
         sequential_update( data, olddata, newdata, C, K, dt);
         tmp = olddata;
         olddata = data;
         data = newdata;
         newdata = tmp;
     }*/
-    clock_t start = clock();
-    cuda_update(data, olddata, newdata, C, K, dt);
-
-   for(i = 0; i < GRID_SZ; i++){
+	clock_t start = clock();
+	
+	cuda_update(olddata, data, newdata, C, K, dt);
+    
+	double use = clock() - start;
+	
+	
+	for(i = 0; i < GRID_SZ; i++){
         for(j = 0; j < GRID_SZ; j++){
-            printf("%f, ", data[i*GRID_SZ+j]);
+            printf("%lf, ", data[i*GRID_SZ+j]);
         }
         printf("\n");
     }
-    float T = clock() - start;
-    printf("time use : %lf\n", T/CLOCKS_PER_SEC);
 
+	printf("time use: %lf\n", use/CLOCKS_PER_SEC);
 }
-void sequential_update(float *data, float *olddata, float *newdata, float C, float K, float dt ){
+void sequential_update(double *data, double *olddata, double *newdata, double C, double K, double dt ){
     int i, j, add_i, sub_i, add_j, sub_j;
-    float pot;
+    double pot;
     for( i = 0; i < GRID_SZ; i++){
         for( j = 0; j < GRID_SZ; j++){
             add_i = i+1 >= GRID_SZ ? i : i+1;
@@ -117,37 +136,4 @@ void sequential_update(float *data, float *olddata, float *newdata, float C, flo
             newdata[i * GRID_SZ + j] = ( pow(C * dt, 2) * pot * 2 + 4 * data[i * GRID_SZ + j] - olddata[i * GRID_SZ + j] *(2 - K * dt) ) / (2 + K * dt);
         }
     }
-}
-void cuda_update(float *data, float *olddata, float *newdata, float C, float K, float dt ){
-    float *gpu_old, *gpu_val, *gpu_new;
-    
-    cudaMalloc((void**) &gpu_old, sizeof(float)*ARR_SZ);
-    cudaMalloc((void**) &gpu_val, sizeof(float)*ARR_SZ);
-    cudaMalloc((void**) &gpu_new, sizeof(float)*ARR_SZ);
-    
-    cudaMemcpy(gpu_old, olddata,sizeof(float)*ARR_SZ, cudaMemcpyHostToDevice);
-    cudaMemcpy(gpu_val, data,sizeof(float)*ARR_SZ, cudaMemcpyHostToDevice);
-    cudaMemcpy(gpu_new, newdata,sizeof(float)*ARR_SZ, cudaMemcpyHostToDevice);
-    printf("hello\n");
-    
-    //for(i = 1;i <= nsteps; ++i){
-   // int _num = ARR_SZ/THREAD_NUM;
-    //if(_num > BLOCK_NUM) _num = BLOCK_NUM;
-	int i;
-	for(i = 1;i <= STEP; ++i){
-		kernel_cuda_update<<< BLOCK_NUM, THREAD_NUM>>>( gpu_old, gpu_val, gpu_new, 
-                                        ARR_SZ, STEP,GRID_SZ,
-                                        C, K, dt);
-	}
-   
-   // }
-    cudaMemcpy(olddata, gpu_old,sizeof(float)*ARR_SZ, cudaMemcpyDeviceToHost);
-    cudaMemcpy(data, gpu_val,sizeof(float)*ARR_SZ, cudaMemcpyDeviceToHost);
-    cudaMemcpy(newdata, gpu_new,sizeof(float)*ARR_SZ, cudaMemcpyDeviceToHost);
-    cudaFree(gpu_new);
-    cudaFree(gpu_old);
-    cudaFree(gpu_val);
-
-
-
 }
