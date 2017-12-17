@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
+#include <time.h>
 #include "wave_2d.h"
 
 int steps = 20;
@@ -46,6 +47,10 @@ void print_result(){
 int main(){
     int i;
     array_init();
+    clock_t begin = clock();
+#if defined(_WAVE_CUDA_)
+#elif defined(_WAVE_THREADPOOL_)
+#else
     for(i = 0; i < steps; i++){
         sequential_update( data, olddata, newdata, C, K, dt);
         tmp = olddata;
@@ -53,5 +58,8 @@ int main(){
         data = newdata;
         newdata = tmp;
     }
+#endif
+    clock_t end = clock();
     print_result();
+    printf("Time spent: %lf\n", (double)(end-begin)/CLOCKS_PER_SEC);
 }
