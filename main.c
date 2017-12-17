@@ -52,6 +52,13 @@ int main(){
 #if defined(_WAVE_CUDA_)
     cuda_update(olddata, data, newdata, C, K, dt );
 #elif defined(_WAVE_THREADPOOL_)
+    for(i = 0; i < steps; i++){
+        threadpool_update(data, olddata, newdata, C, K, dt);
+        tmp = olddata;
+        olddata = data;
+        data = newdata;
+        newdata = tmp;
+    }
 #else
     for(i = 0; i < steps; i++){
         sequential_update( data, olddata, newdata, C, K, dt);
