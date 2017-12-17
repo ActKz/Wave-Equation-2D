@@ -35,7 +35,13 @@ int main(){
     }
 
     for(i = 0; i < 20; i++){
+        #if defined(IMP_THREAD_POOL)
+        printf("[%d]Run in parallel with a thread pool \n", i);
+        threadpool_update(data, olddata, newdata, C, K, dt);
+        #else
+        printf("[%d]Run in sequential \n", i);
         sequential_update( data, olddata, newdata, C, K, dt);
+        #endif
         tmp = olddata;
         olddata = data;
         data = newdata;
