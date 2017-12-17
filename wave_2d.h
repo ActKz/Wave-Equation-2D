@@ -6,5 +6,6 @@
 #define PEAK_SZ 31
 
 void sequential_update(double *data, double *olddata, double *newdata, double, double, double );
+void threadpool_update(double *data, double *olddata, double *newdata, double C, double K, double dt);
 
 #endif
