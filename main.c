@@ -5,6 +5,7 @@
 #include <time.h>
 #include "wave_2d.h"
 
+
 int steps = 20;
 double dt = 0.04, C = 16, K = 0.1, h = 6;
 double *data, *olddata, *newdata, *tmp;
@@ -49,6 +50,7 @@ int main(){
     array_init();
     clock_t begin = clock();
 #if defined(_WAVE_CUDA_)
+    cuda_update(olddata, data, newdata, C, K, dt );
 #elif defined(_WAVE_THREADPOOL_)
 #else
     for(i = 0; i < steps; i++){
