@@ -6,13 +6,17 @@
 #include "wave_2d.h"
 
 
-int steps = 20;
-double dt = 0.04, C = 16, K = 0.1, h = 6;
+const int steps = 1000;
+const double dt = 0.04, C = 16, K = 0.1, h = 6;
 double *data, *olddata, *newdata, *tmp;
 
 void array_init(){
     int i, j;
-    double x[PEAK_SZ][PEAK_SZ], linspace[PEAK_SZ], delta = 2.0/(PEAK_SZ-1.0);
+    double **x, *linspace, delta = 2.0/(PEAK_SZ-1.0);
+    x = (double**)malloc(sizeof(double*)*PEAK_SZ);
+    for(i = 0; i < PEAK_SZ; i++)
+        x[i] = (double*)malloc(sizeof(double)*PEAK_SZ);
+    linspace = (double*)malloc(sizeof(double)*PEAK_SZ);
     data = (double*)malloc(sizeof(double)*ARR_SZ);
     olddata = (double*)malloc(sizeof(double)*ARR_SZ);
     newdata = (double*)malloc(sizeof(double)*ARR_SZ);
@@ -31,10 +35,14 @@ void array_init(){
     }
     for(i = 0; i < PEAK_SZ; i++){
         for(j = 0; j < PEAK_SZ; j++){
-            data[(i+20)*GRID_SZ+j+20] += h * exp( -5 * (pow(x[i][j], 2 ) + pow(x[j][i], 2 )));
+            data[(i+100)*GRID_SZ+j+100] += h * exp( -5 * (pow(x[i][j], 2 ) + pow(x[j][i], 2 )));
         }
     }
     memcpy(olddata, data, sizeof(double)*ARR_SZ);
+    for(i = 0; i < PEAK_SZ; i++)
+        free(x[i]);
+    free(x);
+    free(linspace);
 }
 void print_result(){
     int i, j;
@@ -50,7 +58,7 @@ int main(){
     array_init();
     clock_t begin = clock();
 #if defined(_WAVE_CUDA_)
-    cuda_update(olddata, data, newdata, C, K, dt );
+    cuda_update(olddata, data, newdata, C, K, dt, steps );
 #elif defined(_WAVE_THREADPOOL_)
     for(i = 0; i < steps; i++){
         threadpool_update(data, olddata, newdata, C, K, dt);
@@ -71,4 +79,7 @@ int main(){
     clock_t end = clock();
     print_result();
     printf("Time spent: %lf\n", (double)(end-begin)/CLOCKS_PER_SEC);
+    free(data);
+    free(olddata);
+    free(newdata);
 }

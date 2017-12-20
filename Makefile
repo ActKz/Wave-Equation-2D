@@ -19,4 +19,4 @@ libthp.so: wave_2d_thp.cpp
 	g++ -std=gnu++11 -O2 -fpic -shared -Wall -Wextra $< -Wl,-soname,$@ -o $@
 
 clean:
-	rm *.o bin/*
+	rm -f *.so *.o bin/*

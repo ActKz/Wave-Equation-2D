@@ -44,7 +44,7 @@ __global__ void cuda_move_data(double *olddata, double *data, double *newdata){
 	}
 
 }
-void cuda_update(double* olddata, double* data, double* newdata,double C,double K, double dt){
+void cuda_update(double* olddata, double* data, double* newdata,double C,double K, double dt, int step){
 	double *gpu_data, *gpu_old, *gpu_new;
 	cudaMalloc((void**) &gpu_data, sizeof(double)*ARR_SZ);
 	cudaMalloc((void**) &gpu_old, sizeof(double)*ARR_SZ);
@@ -55,7 +55,7 @@ void cuda_update(double* olddata, double* data, double* newdata,double C,double 
 	//int _num = ARR_SZ/THREAD_NUM + 1;
 	//if(_num > BLOCK_NUM) _num = BLOCK_NUM;
 	int i;
-	for(i = 1;i <= 2000; ++i){
+	for(i = 1;i <= step; ++i){
 		kernel_cuda_update<<< BLOCK_NUM, THREAD_NUM>>>(gpu_old, gpu_data, gpu_new,C, K, dt);
 		cuda_move_data<<<BLOCK_NUM, THREAD_NUM>>>(gpu_old, gpu_data, gpu_new);
 	}
