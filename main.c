@@ -77,7 +77,9 @@ int main(){
     }
 #endif
     clock_t end = clock();
+#if defined(_PRINT_RESULT_)
     print_result();
+#endif
     printf("Time spent: %lf\n", (double)(end-begin)/CLOCKS_PER_SEC);
     free(data);
     free(olddata);
