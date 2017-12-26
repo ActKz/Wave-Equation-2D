@@ -35,7 +35,7 @@ void array_init(){
     }
     for(i = 0; i < PEAK_SZ; i++){
         for(j = 0; j < PEAK_SZ; j++){
-            data[(i+100)*GRID_SZ+j+100] += h * exp( -5 * (pow(x[i][j], 2 ) + pow(x[j][i], 2 )));
+            data[(i+PEAK_POS)*GRID_SZ+j+PEAK_POS] += h * exp( -5 * (pow(x[i][j], 2 ) + pow(x[j][i], 2 )));
         }
     }
     memcpy(olddata, data, sizeof(double)*ARR_SZ);
